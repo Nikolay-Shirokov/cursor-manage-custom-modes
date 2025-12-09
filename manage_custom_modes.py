@@ -80,6 +80,12 @@ class CustomModesManager:
             
             if result:
                 data = json.loads(result[0])
+                if isinstance(data.get("value"), str):
+                    try:
+                        nested_data = json.loads(data["value"])
+                        return nested_data.get("composerState", {})
+                    except json.JSONDecodeError:
+                        return data.get("composerState", {})
                 return data.get("composerState", {})
             return None
         except Exception as e:
@@ -100,13 +106,29 @@ class CustomModesManager:
             result = cursor.fetchone()
             
             if result:
-                data = json.loads(result[0])
-                data["composerState"] = composer_state
+                # Загружаем всю JSON-структуру
+                full_data = json.loads(result[0])
+                
+                # Проверяем, существует ли ключ 'value' и является ли он строкой
+                if isinstance(full_data.get("value"), str):
+                    try:
+                        nested_data = json.loads(full_data["value"])
+                        nested_data["composerState"] = composer_state
+                        full_data["value"] = json.dumps(nested_data, ensure_ascii=False)
+                    except json.JSONDecodeError:
+                        # Если 'value' не JSON, работаем со старым форматом
+                        full_data["composerState"] = composer_state
+                else:
+                    # Если 'value' нет или не строка, работаем со старым форматом
+                    full_data["composerState"] = composer_state
+
+                # Сохраняем обратно всю структуру
+                new_value = json.dumps(full_data, ensure_ascii=False)
                 
                 # Обновляем данные
                 cursor.execute(
                     "UPDATE ItemTable SET value = ? WHERE key = ?",
-                    (json.dumps(data, ensure_ascii=False), self.modes_key)
+                    (new_value, self.modes_key)
                 )
                 conn.commit()
                 conn.close()
@@ -236,9 +258,13 @@ class CustomModesManager:
                 modes.append(mode)
             
             composer_state["modes4"] = modes
+
+            # Принудительно пересоздаем порядок режимов на основе обновленного списка
+            composer_state["modesOrder"] = [m["id"] for m in modes]
             
             if self._save_composer_state(composer_state):
                 print(f"Режим '{mode.get('name')}' успешно импортирован!")
+                print("\n[ВАЖНО] Чтобы режим появился, полностью закройте Cursor и запустите его снова.")
                 return True
             return False
             
@@ -268,9 +294,13 @@ class CustomModesManager:
             return False
         
         composer_state["modes4"] = new_modes
+
+        # Принудительно пересоздаем порядок режимов
+        composer_state["modesOrder"] = [m["id"] for m in new_modes]
         
         if self._save_composer_state(composer_state):
             print(f"Режим с ID '{mode_id}' успешно удален!")
+            print("\n[ВАЖНО] Чтобы режим исчез из интерфейса, полностью закройте Cursor и запустите его снова.")
             return True
         return False
     
@@ -380,6 +410,7 @@ def main():
     
     args = parser.parse_args()
     
+    print("\n[ВАЖНО] Перед использованием скрипта полностью закройте Cursor, иначе изменения не сохранятся.")
     try:
         manager = CustomModesManager(args.db)
         print(f"Используется база данных: {manager.db_path}")
