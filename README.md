@@ -53,6 +53,34 @@ python manage_custom_modes.py --db /путь/к/state.vscdb
 python manage_custom_modes.py --db state.vscdb
 ```
 
+#### Неинтерактивный режим (командная строка)
+
+```bash
+# Просмотр всех режимов
+python manage_custom_modes.py --list
+
+# Просмотр только кастомных режимов
+python manage_custom_modes.py --list-custom
+
+# Экспорт режима
+python manage_custom_modes.py --export MODE_ID output.json
+
+# Импорт режима
+python manage_custom_modes.py --import mode.json
+
+# Импорт с указанием ID
+python manage_custom_modes.py --import mode.json --mode-id custom-id
+
+# Удаление режима
+python manage_custom_modes.py --delete MODE_ID
+
+# Создание шаблона
+python manage_custom_modes.py --create-template template.json
+
+# Справка по всем командам
+python manage_custom_modes.py --help
+```
+
 #### Программное использование
 
 ```python
@@ -175,13 +203,22 @@ manager.create_mode_template("template.json")
 
 ### Создание нового режима
 
+#### Интерактивный способ
+
 1. Создайте шаблон:
 ```bash
 python manage_custom_modes.py
 # Выберите пункт 6
 ```
 
-2. Отредактируйте `mode_template.json`:
+#### Неинтерактивный способ
+
+1. Создайте шаблон командой:
+```bash
+python manage_custom_modes.py --create-template my_mode.json
+```
+
+2. Отредактируйте `my_mode.json` или `mode_template.json`:
 ```json
 {
   "id": "my-analyzer",
@@ -200,11 +237,17 @@ python manage_custom_modes.py
 
 3. Импортируйте режим:
 ```bash
+# Интерактивно
 python manage_custom_modes.py
 # Выберите пункт 4
+
+# Или через командную строку
+python manage_custom_modes.py --import my_mode.json
 ```
 
 ### Редактирование существующего режима
+
+#### Интерактивный способ
 
 1. Экспортируйте режим:
 ```bash
@@ -218,6 +261,20 @@ python manage_custom_modes.py
 ```bash
 python manage_custom_modes.py
 # Выберите пункт 4
+```
+
+#### Неинтерактивный способ
+
+1. Экспортируйте режим:
+```bash
+python manage_custom_modes.py --export MODE_ID mode.json
+```
+
+2. Отредактируйте `mode.json`
+
+3. Импортируйте обратно:
+```bash
+python manage_custom_modes.py --import mode.json --mode-id MODE_ID
 ```
 
 ### Копирование режима
@@ -260,10 +317,18 @@ cp ~/Library/Application\ Support/Cursor/User/globalStorage/state.vscdb ~/Librar
 python manage_custom_modes.py --db "/полный/путь/к/state.vscdb"
 ```
 
+### Ошибка кодировки в Windows
+
+Скрипт автоматически настраивает кодировку UTF-8 для корректного отображения русских символов в Windows. Если проблемы остаются, убедитесь, что используется Python 3.x.
+
+### EOFError при неинтерактивном запуске
+
+Скрипт автоматически обрабатывает ситуации, когда запускается в неинтерактивной среде (например, через CI/CD). Для таких случаев используйте аргументы командной строки (`--list`, `--export`, и т.д.) вместо интерактивного меню.
+
 ### Ошибка импорта
 
 Проверьте, что JSON файл содержит все обязательные поля:
-- `id`, `name`, `icon`, `thinkingLevel`, `autoRun`, `shouldAutoApplyIfNoEditTool`, 
+- `id`, `name`, `icon`, `thinkingLevel`, `autoRun`, `shouldAutoApplyIfNoEditTool`,
   `enabledTools`, `autoFix`, `enabledMcpServers`
 
 ### Режим не отображается в Cursor

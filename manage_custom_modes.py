@@ -5,6 +5,12 @@ import os
 from typing import Dict, List, Optional
 from pathlib import Path
 
+# Исправление кодировки для Windows
+if sys.platform == "win32":
+    import codecs
+    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+    sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+
 class CustomModesManager:
     """Менеджер для управления кастомными режимами Cursor"""
     
@@ -306,9 +312,18 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Примеры использования:
-  python manage_custom_modes.py
-  python manage_custom_modes.py --db /путь/к/state.vscdb
-  python manage_custom_modes.py --db state.vscdb
+  Интерактивный режим:
+    python manage_custom_modes.py
+    python manage_custom_modes.py --db /путь/к/state.vscdb
+  
+  Неинтерактивный режим:
+    python manage_custom_modes.py --list
+    python manage_custom_modes.py --list-custom
+    python manage_custom_modes.py --export code1c mode.json
+    python manage_custom_modes.py --import mode.json
+    python manage_custom_modes.py --import mode.json --mode-id my-custom-id
+    python manage_custom_modes.py --delete mode-id
+    python manage_custom_modes.py --create-template my_template.json
         """
     )
     
@@ -317,6 +332,50 @@ def main():
         type=str,
         default=None,
         help="Путь к файлу state.vscdb (если не указан, будет найден автоматически)"
+    )
+    
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="Показать все режимы и выйти"
+    )
+    
+    parser.add_argument(
+        "--list-custom",
+        action="store_true",
+        help="Показать только кастомные режимы и выйти"
+    )
+    
+    parser.add_argument(
+        "--export",
+        nargs=2,
+        metavar=("MODE_ID", "OUTPUT_FILE"),
+        help="Экспортировать режим в файл"
+    )
+    
+    parser.add_argument(
+        "--import",
+        dest="import_file",
+        metavar="INPUT_FILE",
+        help="Импортировать режим из файла"
+    )
+    
+    parser.add_argument(
+        "--mode-id",
+        type=str,
+        help="ID для импортируемого режима (используется с --import)"
+    )
+    
+    parser.add_argument(
+        "--delete",
+        metavar="MODE_ID",
+        help="Удалить режим по ID"
+    )
+    
+    parser.add_argument(
+        "--create-template",
+        metavar="OUTPUT_FILE",
+        help="Создать шаблон режима"
     )
     
     args = parser.parse_args()
@@ -328,6 +387,34 @@ def main():
         print(f"Ошибка: {e}", file=sys.stderr)
         sys.exit(1)
     
+    # Неинтерактивный режим
+    if args.list:
+        manager.list_modes(show_builtin=True)
+        return
+    
+    if args.list_custom:
+        manager.list_modes(show_builtin=False)
+        return
+    
+    if args.export:
+        mode_id, output_file = args.export
+        success = manager.export_mode(mode_id, output_file)
+        sys.exit(0 if success else 1)
+    
+    if args.import_file:
+        success = manager.import_mode(args.import_file, args.mode_id)
+        sys.exit(0 if success else 1)
+    
+    if args.delete:
+        print(f"Удаление режима '{args.delete}'...")
+        success = manager.delete_mode(args.delete)
+        sys.exit(0 if success else 1)
+    
+    if args.create_template:
+        success = manager.create_mode_template(args.create_template)
+        sys.exit(0 if success else 1)
+    
+    # Интерактивный режим
     while True:
         print("\n" + "="*50)
         print("Управление кастомными режимами Cursor")
@@ -341,7 +428,11 @@ def main():
         print("0. Выход")
         print()
         
-        choice = input("Выберите действие: ").strip()
+        try:
+            choice = input("Выберите действие: ").strip()
+        except EOFError:
+            print("\nОбнаружен неинтерактивный режим. Завершение работы.")
+            break
         
         if choice == "1":
             manager.list_modes(show_builtin=True)
@@ -350,24 +441,40 @@ def main():
             manager.list_modes(show_builtin=False)
         
         elif choice == "3":
-            mode_id = input("Введите ID режима для экспорта: ").strip()
-            output_file = input("Имя выходного файла [mode.json]: ").strip() or "mode.json"
-            manager.export_mode(mode_id, output_file)
+            try:
+                mode_id = input("Введите ID режима для экспорта: ").strip()
+                output_file = input("Имя выходного файла [mode.json]: ").strip() or "mode.json"
+                manager.export_mode(mode_id, output_file)
+            except EOFError:
+                print("\nОперация отменена.")
+                break
         
         elif choice == "4":
-            input_file = input("Путь к JSON файлу режима: ").strip()
-            mode_id = input("Новый ID (оставьте пустым для автогенерации): ").strip() or None
-            manager.import_mode(input_file, mode_id)
+            try:
+                input_file = input("Путь к JSON файлу режима: ").strip()
+                mode_id = input("Новый ID (оставьте пустым для автогенерации): ").strip() or None
+                manager.import_mode(input_file, mode_id)
+            except EOFError:
+                print("\nОперация отменена.")
+                break
         
         elif choice == "5":
-            mode_id = input("Введите ID режима для удаления: ").strip()
-            confirm = input(f"Вы уверены, что хотите удалить режим '{mode_id}'? (yes/no): ").strip().lower()
-            if confirm == "yes":
-                manager.delete_mode(mode_id)
+            try:
+                mode_id = input("Введите ID режима для удаления: ").strip()
+                confirm = input(f"Вы уверены, что хотите удалить режим '{mode_id}'? (yes/no): ").strip().lower()
+                if confirm == "yes":
+                    manager.delete_mode(mode_id)
+            except EOFError:
+                print("\nОперация отменена.")
+                break
         
         elif choice == "6":
-            output_file = input("Имя файла шаблона [mode_template.json]: ").strip() or "mode_template.json"
-            manager.create_mode_template(output_file)
+            try:
+                output_file = input("Имя файла шаблона [mode_template.json]: ").strip() or "mode_template.json"
+                manager.create_mode_template(output_file)
+            except EOFError:
+                print("\nОперация отменена.")
+                break
         
         elif choice == "0":
             print("До свидания!")
@@ -376,7 +483,11 @@ def main():
         else:
             print("Неверный выбор. Попробуйте снова.")
         
-        input("\nНажмите Enter для продолжения...")
+        try:
+            input("\nНажмите Enter для продолжения...")
+        except EOFError:
+            print("\nЗавершение работы.")
+            break
 
 
 if __name__ == "__main__":
